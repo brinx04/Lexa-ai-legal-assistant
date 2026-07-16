@@ -1,5 +1,6 @@
 # backend/app/workers/tasks.py
 import os
+import time
 import pdfplumber
 from celery import shared_task
 from celery_app import celery_instance  # noqa: F401 — ensures Redis broker config is loaded
@@ -8,6 +9,7 @@ from app.models.document import Document, DocStatus
 # NOTE: lexa_brain is imported lazily inside the task to prevent import errors
 # from silently breaking Celery task registration.
 from app.services.embeddings import process_and_store_embeddings
+from app.services.event_bus import DocumentEvent, publish_document_event
 
 
 # ============================================================
@@ -133,6 +135,14 @@ def process_document_pipeline(document_id: str):
         doc.status = DocStatus.PROCESSING
         db.commit()
         print(f"[Worker] Processing started for: {doc.filename}")
+        publish_document_event(
+            DocumentEvent.PROCESSING_STARTED,
+            document_id=document_id,
+            user_email=doc.user_email,
+            filename=doc.filename,
+            status=DocStatus.PROCESSING.value,
+        )
+        pipeline_started_at = time.monotonic()
 
         # ── 1. Extract Text (native + OCR fallback) ──
         extracted_text = extract_text_from_file(doc.s3_path)
@@ -182,6 +192,18 @@ def process_document_pipeline(document_id: str):
                 print(f"[Security Warning] Could not shred file: {str(e)}")
 
         print(f"[Worker] AI Processing successfully finished for: {doc.filename}")
+        publish_document_event(
+            DocumentEvent.PROCESSING_COMPLETED,
+            document_id=document_id,
+            user_email=doc.user_email,
+            filename=doc.filename,
+            status=DocStatus.COMPLETED.value,
+            metadata={
+                "duration_seconds": round(time.monotonic() - pipeline_started_at, 2),
+                "red_flag_count": len(ai_results.get("red_flags") or []),
+                "characters_extracted": len(extracted_text),
+            },
+        )
         return f"Successfully processed {document_id}"
 
     except Exception as e:
@@ -191,6 +213,14 @@ def process_document_pipeline(document_id: str):
             doc.status = DocStatus.FAILED
             db.commit()
         print(f"[Worker] Pipeline crashed: {str(e)}")
+        publish_document_event(
+            DocumentEvent.PROCESSING_FAILED,
+            document_id=document_id,
+            user_email=doc.user_email if doc else None,
+            filename=doc.filename if doc else None,
+            status=DocStatus.FAILED.value,
+            metadata={"error": str(e)[:500]},
+        )
         return f"Failed processing {document_id}: {str(e)}"
 
     finally:

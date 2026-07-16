@@ -19,4 +19,23 @@ celery_instance.conf.update(
     result_serializer="json",
     timezone="Asia/Kolkata",
     enable_utc=True,
+    # Reliability: only ack a task after it finishes, so a worker crash
+    # mid-pipeline requeues the document instead of silently losing it.
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
 )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OBSERVABILITY — attach OpenTelemetry inside each worker process.
+# worker_process_init fires after forking, which is required because the
+# span exporter's background thread cannot be inherited across a fork.
+# ──────────────────────────────────────────────────────────────────────────────
+from celery.signals import worker_process_init
+
+
+@worker_process_init.connect(weak=False)
+def _init_worker_tracing(**_kwargs):
+    from app.core.telemetry import setup_worker_tracing
+
+    setup_worker_tracing()

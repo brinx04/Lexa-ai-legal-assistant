@@ -1,0 +1,58 @@
+# Go notifier — 3 replicas join one Kafka consumer group; the 3 partitions
+# of lexa.document.events are split between them, and a pod failure
+# rebalances automatically. This is horizontal scaling of consumption.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifier
+  namespace: lexa
+  labels: { app: notifier }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: notifier }
+  template:
+    metadata:
+      labels: { app: notifier }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: notifier
+          image: lexa/notifier:latest # build: docker build -t lexa/notifier ./notifier
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - configMapRef: { name: lexa-config }
+          env:
+            - name: PORT
+              value: "8090"
+            - name: KAFKA_GROUP_ID
+              value: lexa-notifier
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8090 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8090 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifier
+  namespace: lexa
+spec:
+  # SSE is a long-lived connection — sessionAffinity keeps a browser pinned
+  # to one pod so its stream isn't cut on every request.
+  sessionAffinity: ClientIP
+  selector: { app: notifier }
+  ports:
+    - port: 8090

@@ -1,0 +1,20 @@
+# Non-secret configuration shared by the api and worker pods.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lexa-config
+  namespace: lexa
+data:
+  POSTGRES_USER: "lexa_admin"
+  POSTGRES_DB: "lexa_db"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  QDRANT_URL: "http://qdrant:6333"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_EVENTS_TOPIC: "lexa.document.events"
+  KAFKA_DLQ_TOPIC: "lexa.document.events.dlq"
+  OTEL_ENABLED: "true"
+  # Point at your collector (Jaeger, Tempo, or an OTel Collector service)
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger-collector.observability:4318"

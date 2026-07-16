@@ -66,3 +66,20 @@ yarn-error.log*
 *.pem
 .vercel
 coverage/
+
+# ──────────────────────────────────────────────
+# Committed templates (negate the .env ignores)
+# ──────────────────────────────────────────────
+!.env.example
+!frontend/.env.local.example
+
+# Kubernetes secrets with real values
+k8s/02-secrets.yaml
+
+# Go build artifacts
+notifier/notifier
+notifier/*.exe
+notifier/go.sum
+
+# Local AI tooling config (never commit)
+.claude/

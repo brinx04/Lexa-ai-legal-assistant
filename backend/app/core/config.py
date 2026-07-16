@@ -26,8 +26,18 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     LEXA_SECRET_API_KEY: str = "default_unsafe_key"
 
-    # API Integrations
-    KANOON_API_TOKEN: str = "8e12521a3fe322ae0c1437fa215108c547c22d01"
+    # API Integrations — set in .env, never hardcode credentials here
+    KANOON_API_TOKEN: str = ""
+
+    # ── Event streaming (Kafka) ──────────────────────────────────────────
+    KAFKA_ENABLED: bool = True
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9094"
+    KAFKA_EVENTS_TOPIC: str = "lexa.document.events"
+    KAFKA_DLQ_TOPIC: str = "lexa.document.events.dlq"
+
+    # ── Observability (OpenTelemetry → Jaeger, Prometheus) ───────────────
+    OTEL_ENABLED: bool = True
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4318"
 
     @computed_field
     @property

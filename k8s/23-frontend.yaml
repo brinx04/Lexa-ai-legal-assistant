@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: lexa
+  labels: { app: frontend }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: frontend }
+  template:
+    metadata:
+      labels: { app: frontend }
+    spec:
+      containers:
+        - name: frontend
+          image: lexa/frontend:latest # build: docker build -t lexa/frontend ./frontend
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: http://api:8000/api/v1
+            - name: NOTIFIER_URL
+              value: http://notifier:8090
+            - name: NEXTAUTH_URL
+              value: https://lexa.example.com # ← your public URL
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef: { name: lexa-secrets, key: NEXTAUTH_SECRET }
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: lexa-secrets, key: GOOGLE_CLIENT_ID }
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: lexa-secrets, key: GOOGLE_CLIENT_SECRET }
+            - name: LEXA_SECRET_API_KEY
+              valueFrom:
+                secretKeyRef: { name: lexa-secrets, key: LEXA_SECRET_API_KEY }
+          readinessProbe:
+            httpGet: { path: /auth/signin, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: lexa
+spec:
+  selector: { app: frontend }
+  ports:
+    - port: 3000

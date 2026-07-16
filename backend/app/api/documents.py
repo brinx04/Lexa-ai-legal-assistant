@@ -16,6 +16,7 @@ from app.core.vector_db import qdrant_client, COLLECTION_NAME
 
 import shutil
 from app.core.security import verify_api_key
+from app.services.event_bus import DocumentEvent, publish_document_event
 
 # Protect the entire router with the API Key
 router = APIRouter(
@@ -60,6 +61,18 @@ async def upload_document(request: Request, file: UploadFile = File(...), db: Se
         process_document_pipeline.delay(str(db_doc.id))
     except Exception:
         task_queued = False
+
+    # Broadcast the lifecycle event — the Go notifier pushes this to the
+    # user's browser over SSE; other consumers (audit, analytics) can
+    # subscribe to the same topic without touching this code.
+    publish_document_event(
+        DocumentEvent.UPLOADED,
+        document_id=db_doc.id,
+        user_email=user_email,
+        filename=db_doc.filename,
+        status=db_doc.status.value,
+        metadata={"queued": task_queued},
+    )
 
     return {
         "message": "Document uploaded" + (" and processing queued" if task_queued else " (worker queue unavailable, will retry)"),
@@ -195,5 +208,12 @@ async def delete_document(request: Request, doc_id: UUID, db: Session = Depends(
     
     db.delete(doc)
     db.commit()
+
+    publish_document_event(
+        DocumentEvent.DELETED,
+        document_id=doc_id,
+        user_email=request.headers.get("x-user-email"),
+        filename=doc.filename,
+    )
 
     return {"message": f"Document {doc.filename} successfully deleted."}
